@@ -9,8 +9,19 @@ const paymentRoutes = require('./routes/payment');
 
 const app = express();
 app.use(express.json());
+const allowedOrigins = (process.env.ALLOWED_ORIGIN || '*')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGIN || '*',
+  origin: function (origin, callback) {
+    // Разрешаем запросы без origin (например, из Postman) и из списка разрешённых адресов
+    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('CORS: адрес ' + origin + ' не разрешён'));
+  },
 }));
 
 app.get('/', (req, res) => {
