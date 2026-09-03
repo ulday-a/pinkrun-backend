@@ -6,6 +6,7 @@ const { initDb } = require('./db');
 const registerRoutes = require('./routes/register');
 const authRoutes = require('./routes/auth');
 const paymentRoutes = require('./routes/payment');
+const testRoutes = require('./routes/test'); // ВРЕМЕННО — убрать после подключения BCC Pay
 
 const app = express();
 app.use(express.json());
@@ -16,7 +17,6 @@ const allowedOrigins = (process.env.ALLOWED_ORIGIN || '*')
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Разрешаем запросы без origin (например, из Postman) и из списка разрешённых адресов
     if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
@@ -31,6 +31,7 @@ app.get('/', (req, res) => {
 app.use('/api', registerRoutes);
 app.use('/api', authRoutes);
 app.use('/api', paymentRoutes);
+app.use('/', testRoutes); // ВРЕМЕННО — убрать после подключения BCC Pay
 
 const PORT = process.env.PORT || 3000;
 
