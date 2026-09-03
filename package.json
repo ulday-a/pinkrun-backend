@@ -1,0 +1,18 @@
+{
+  "name": "pinkrun-backend",
+  "version": "1.0.0",
+  "description": "Бэкенд для сайта Pink Run: регистрация участников, вход по SMS-коду, оплата BCC Pay",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "pg": "^8.12.0",
+    "node-fetch": "^2.7.0"
+  }
+}
