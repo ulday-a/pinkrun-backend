@@ -37,6 +37,7 @@ router.get('/admin-test', (req, res) => {
   <input id="key" placeholder="ключ из TEST_ADMIN_KEY">
 
   <button onclick="markPaid()">Отметить как оплачено</button>
+  <button onclick="deleteParticipant()" style="background:#6b6470; margin-top:10px;">Удалить участника</button>
   <div id="result"></div>
 
 <script>
@@ -54,6 +55,28 @@ async function markPaid(){
     const data = await res.json();
     if(!res.ok) throw new Error(data.error || 'Ошибка');
     resultEl.textContent = 'Готово: ' + participantNumber + ' отмечен как оплаченный.';
+    resultEl.style.color = 'green';
+  } catch(err) {
+    resultEl.textContent = 'Ошибка: ' + err.message;
+    resultEl.style.color = 'red';
+  }
+}
+
+async function deleteParticipant(){
+  const participantNumber = document.getElementById('pnum').value.trim();
+  const key = document.getElementById('key').value.trim();
+  const resultEl = document.getElementById('result');
+  if(!confirm('Точно удалить участника ' + participantNumber + '? Это необратимо.')) return;
+  resultEl.textContent = 'Удаление...';
+  try {
+    const res = await fetch('/api/test/delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ participantNumber, key }),
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'Ошибка');
+    resultEl.textContent = 'Готово: ' + participantNumber + ' удалён из базы.';
     resultEl.style.color = 'green';
   } catch(err) {
     resultEl.textContent = 'Ошибка: ' + err.message;
@@ -90,6 +113,34 @@ router.post('/api/test/mark-paid', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('Ошибка тестовой отметки оплаты:', err);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// POST /api/test/delete — удалить тестового участника из базы (требует ключ доступа)
+router.post('/api/test/delete', async (req, res) => {
+  try {
+    const { participantNumber, key } = req.body;
+
+    if (key !== TEST_KEY) {
+      return res.status(403).json({ error: 'Неверный ключ доступа' });
+    }
+    if (!participantNumber) {
+      return res.status(400).json({ error: 'Не указан номер участника' });
+    }
+
+    const result = await pool.query(
+      `DELETE FROM participants WHERE participant_number = $1 RETURNING id`,
+      [participantNumber]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Участник с таким номером не найден' });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Ошибка удаления участника:', err);
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });
