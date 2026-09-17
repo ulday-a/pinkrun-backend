@@ -26,7 +26,8 @@ router.post(
 
     try {
 
-      const participantId = req.query.participantId;
+     const participantId =
+  req.get('X-Participant-Id') || req.query.participantId;
       const fileName = req.query.fileName || 'receipt';
       const contentType = req.headers['content-type'];
 
