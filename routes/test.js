@@ -67,22 +67,35 @@ router.get('/admin-test', checkAdminKey, async (req, res) => {
           ? 'paid'
           : 'rejected';
 
-      const actions =
-        p.status === 'payment_review'
-          ? `
-            <button
-              class="btn approve"
-              onclick="changeStatus(${p.id}, 'paid')">
-              Подтвердить
-            </button>
+      const statusActions =
+  p.status === 'payment_review'
+    ? `
+      <button
+        class="btn approve"
+        onclick="changeStatus(${p.id}, 'paid')">
+        Подтвердить
+      </button>
 
-            <button
-              class="btn reject"
-              onclick="changeStatus(${p.id}, 'rejected')">
-              Отклонить
-            </button>
-          `
-          : '—';
+      <button
+        class="btn reject"
+        onclick="changeStatus(${p.id}, 'rejected')">
+        Отклонить
+      </button>
+    `
+    : '';
+
+const actions = `
+  ${statusActions}
+
+  <button
+    class="btn delete"
+    onclick="deleteParticipant(
+      ${p.id},
+      '${escapeHtml(p.participant_number || '')}'
+    )">
+    Удалить
+  </button>
+`;
 
       const receipt = p.receipt_filename
         ? `
@@ -264,7 +277,38 @@ td {
   background: #f2ecef;
   color: #5e555a;
 }
+.delete {
+  background: #fff0f0;
+  color: #b42318;
+}
 
+.delete:hover {
+  background: #ffe0e0;
+}
+
+.delete-all {
+  background: #b42318;
+  color: white;
+  padding: 11px 16px;
+}
+
+.delete-all:hover {
+  background: #8f1c13;
+}
+
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+@media(max-width: 700px) {
+  .header-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
 .empty {
   padding: 50px;
   text-align: center;
@@ -291,16 +335,28 @@ td {
 
 <div class="container">
 
-  <div class="header">
+ <div class="header">
 
-    <h1>Pink Run — проверка оплат</h1>
+  <div class="header-row">
 
-    <p>
-      Здесь отображаются заявки,
-      по которым участники отправили подтверждение оплаты.
-    </p>
+    <div>
+      <h1>Pink Run — проверка оплат</h1>
+
+      <p>
+        Здесь отображаются заявки,
+        по которым участники отправили подтверждение оплаты.
+      </p>
+    </div>
+
+    <button
+      class="btn delete-all"
+      onclick="deleteAllParticipants()">
+      Удалить все записи
+    </button>
 
   </div>
+
+</div>
 
   <div class="card">
 
@@ -392,7 +448,103 @@ async function changeStatus(id, status) {
 
   }
 }
+async function deleteParticipant(id, participantNumber) {
 
+  const confirmed = confirm(
+    'Удалить участника ' +
+    participantNumber +
+    '?\n\n' +
+    'Будут удалены регистрация и загруженный чек.'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+
+    const response = await fetch(
+      '/admin-test/participant/' + id,
+      {
+        method: 'DELETE',
+
+        headers: {
+          'X-Admin-Key': ADMIN_KEY
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error || 'Не удалось удалить запись'
+      );
+    }
+
+    location.reload();
+
+  } catch (error) {
+
+    alert(error.message);
+
+  }
+}
+
+
+async function deleteAllParticipants() {
+
+  const firstConfirm = confirm(
+    'Удалить ВСЕ записи участников?\n\n' +
+    'Это действие нельзя отменить.'
+  );
+
+  if (!firstConfirm) {
+    return;
+  }
+
+  const secondConfirm = confirm(
+    'Подтвердите ещё раз.\n\n' +
+    'Будут удалены ВСЕ регистрации и ВСЕ загруженные чеки.'
+  );
+
+  if (!secondConfirm) {
+    return;
+  }
+
+  try {
+
+    const response = await fetch(
+      '/admin-test/participants',
+      {
+        method: 'DELETE',
+
+        headers: {
+          'X-Admin-Key': ADMIN_KEY
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error || 'Не удалось удалить записи'
+      );
+    }
+
+    alert(
+      'Удалено записей: ' + data.deleted
+    );
+
+    location.reload();
+
+  } catch (error) {
+
+    alert(error.message);
+
+  }
+}
 </script>
 
 </body>
@@ -490,6 +642,91 @@ router.post(
   }
 );
 
+/* =========================================================
+   УДАЛЕНИЕ ОДНОГО УЧАСТНИКА
+   ========================================================= */
+
+router.delete(
+  '/admin-test/participant/:id',
+  checkAdminKey,
+  async (req, res) => {
+
+    try {
+
+      const result = await pool.query(
+        `
+        DELETE FROM participants
+        WHERE id = $1
+        RETURNING
+          id,
+          participant_number
+        `,
+        [req.params.id]
+      );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          error: 'Участник не найден'
+        });
+      }
+
+      return res.json({
+        success: true,
+        participantNumber:
+          result.rows[0].participant_number
+      });
+
+    } catch (error) {
+
+      console.error(
+        'Ошибка удаления участника:',
+        error
+      );
+
+      return res.status(500).json({
+        error: 'Не удалось удалить участника'
+      });
+    }
+  }
+);
+
+
+/* =========================================================
+   УДАЛЕНИЕ ВСЕХ УЧАСТНИКОВ
+   ========================================================= */
+
+router.delete(
+  '/admin-test/participants',
+  checkAdminKey,
+  async (req, res) => {
+
+    try {
+
+      const result = await pool.query(
+        `
+        DELETE FROM participants
+        RETURNING id
+        `
+      );
+
+      return res.json({
+        success: true,
+        deleted: result.rowCount
+      });
+
+    } catch (error) {
+
+      console.error(
+        'Ошибка удаления всех участников:',
+        error
+      );
+
+      return res.status(500).json({
+        error: 'Не удалось удалить записи'
+      });
+    }
+  }
+);
 
 /* =========================================================
    ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
