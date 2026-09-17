@@ -397,8 +397,11 @@ td {
 
 <script>
 
-const ADMIN_KEY =
-  ${JSON.stringify(TEST_KEY)};
+const ADMIN_KEY = ${JSON.stringify(TEST_KEY)};
+
+/* =========================================================
+   ИЗМЕНЕНИЕ СТАТУСА ОПЛАТЫ
+   ========================================================= */
 
 async function changeStatus(id, status) {
 
@@ -444,16 +447,29 @@ async function changeStatus(id, status) {
 
   } catch (error) {
 
-    alert(error.message);
+    console.error(
+      'Ошибка изменения статуса:',
+      error
+    );
 
+    alert(error.message);
   }
 }
-async function deleteParticipant(id, participantNumber) {
+
+
+/* =========================================================
+   УДАЛЕНИЕ ОДНОГО УЧАСТНИКА
+   ========================================================= */
+
+async function deleteParticipant(
+  id,
+  participantNumber
+) {
 
   const confirmed = confirm(
     'Удалить участника ' +
     participantNumber +
-    '?\n\n' +
+    '?\\n\\n' +
     'Будут удалены регистрация и загруженный чек.'
   );
 
@@ -464,7 +480,8 @@ async function deleteParticipant(id, participantNumber) {
   try {
 
     const response = await fetch(
-      '/admin-test/participant/' + id,
+      '/admin-test/participant/' +
+      encodeURIComponent(id),
       {
         method: 'DELETE',
 
@@ -474,28 +491,49 @@ async function deleteParticipant(id, participantNumber) {
       }
     );
 
-    const data = await response.json();
+    let data;
+
+    try {
+      data = await response.json();
+    } catch (e) {
+      data = {};
+    }
 
     if (!response.ok) {
       throw new Error(
-        data.error || 'Не удалось удалить запись'
+        data.error ||
+        'Не удалось удалить запись'
       );
     }
+
+    alert(
+      'Участник ' +
+      participantNumber +
+      ' удалён.'
+    );
 
     location.reload();
 
   } catch (error) {
 
-    alert(error.message);
+    console.error(
+      'Ошибка удаления участника:',
+      error
+    );
 
+    alert(error.message);
   }
 }
 
 
+/* =========================================================
+   УДАЛЕНИЕ ВСЕХ УЧАСТНИКОВ
+   ========================================================= */
+
 async function deleteAllParticipants() {
 
   const firstConfirm = confirm(
-    'Удалить ВСЕ записи участников?\n\n' +
+    'Удалить ВСЕ записи участников?\\n\\n' +
     'Это действие нельзя отменить.'
   );
 
@@ -504,7 +542,7 @@ async function deleteAllParticipants() {
   }
 
   const secondConfirm = confirm(
-    'Подтвердите ещё раз.\n\n' +
+    'Подтвердите ещё раз.\\n\\n' +
     'Будут удалены ВСЕ регистрации и ВСЕ загруженные чеки.'
   );
 
@@ -525,26 +563,39 @@ async function deleteAllParticipants() {
       }
     );
 
-    const data = await response.json();
+    let data;
+
+    try {
+      data = await response.json();
+    } catch (e) {
+      data = {};
+    }
 
     if (!response.ok) {
       throw new Error(
-        data.error || 'Не удалось удалить записи'
+        data.error ||
+        'Не удалось удалить записи'
       );
     }
 
     alert(
-      'Удалено записей: ' + data.deleted
+      'Удалено записей: ' +
+      (data.deleted ?? 0)
     );
 
     location.reload();
 
   } catch (error) {
 
-    alert(error.message);
+    console.error(
+      'Ошибка удаления всех участников:',
+      error
+    );
 
+    alert(error.message);
   }
 }
+
 </script>
 
 </body>
