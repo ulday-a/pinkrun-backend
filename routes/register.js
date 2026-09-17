@@ -468,8 +468,7 @@ router.get(
           number:
             r.participant_number,
 
-          name:
-            \`\${r.first_name} \${r.last_name}\`
+        name: `${r.first_name} ${r.last_name}`,
 
         }));
 
