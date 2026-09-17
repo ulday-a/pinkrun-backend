@@ -35,67 +35,88 @@ router.get('/admin-test', checkAdminKey, async (req, res) => {
         participant_number,
         first_name,
         last_name,
+        birth_date,
+        gender,
+        email,
+        emergency_phone,
+        phone,
         distance,
         price,
         status,
+        payment_id,
         receipt_filename,
-        receipt_uploaded_at
+        receipt_uploaded_at,
+        created_at,
+        cancelled_at
       FROM participants
-      WHERE status IN ('payment_review', 'paid', 'rejected')
-      ORDER BY
-        CASE
-          WHEN status = 'payment_review' THEN 1
-          WHEN status = 'paid' THEN 2
-          ELSE 3
-        END,
-        id DESC
+      ORDER BY id DESC
     `);
 
     const rows = result.rows.map(p => {
 
-      const statusText =
-        p.status === 'payment_review'
-          ? 'Оплата на проверке'
-          : p.status === 'paid'
-          ? 'Оплачено'
-          : 'Отклонено';
+      let statusText = 'Неизвестный статус';
+      let statusClass = 'pending';
 
-      const statusClass =
-        p.status === 'payment_review'
-          ? 'review'
-          : p.status === 'paid'
-          ? 'paid'
-          : 'rejected';
+      if (p.status === 'pending_payment') {
+        statusText = 'Ожидает оплаты';
+        statusClass = 'pending';
+      }
+
+      if (p.status === 'payment_review') {
+        statusText = 'Оплата на проверке';
+        statusClass = 'review';
+      }
+
+      if (p.status === 'paid') {
+        statusText = 'Оплачено';
+        statusClass = 'paid';
+      }
+
+      if (p.status === 'rejected') {
+        statusText = 'Отклонено';
+        statusClass = 'rejected';
+      }
+
+      if (p.status === 'cancelled') {
+        statusText = 'Отменено';
+        statusClass = 'cancelled';
+      }
+
+
+      /* Кнопки подтвердить / отклонить
+         показываем только когда чек отправлен */
 
       const statusActions =
-  p.status === 'payment_review'
-    ? `
-      <button
-        class="btn approve"
-        onclick="changeStatus(${p.id}, 'paid')">
-        Подтвердить
-      </button>
+        p.status === 'payment_review'
+          ? `
+            <button
+              class="btn approve"
+              onclick="changeStatus(${p.id}, 'paid')">
+              Подтвердить
+            </button>
 
-      <button
-        class="btn reject"
-        onclick="changeStatus(${p.id}, 'rejected')">
-        Отклонить
-      </button>
-    `
-    : '';
+            <button
+              class="btn reject"
+              onclick="changeStatus(${p.id}, 'rejected')">
+              Отклонить
+            </button>
+          `
+          : '';
 
-const actions = `
-  ${statusActions}
 
-  <button
-    class="btn delete"
-    onclick="deleteParticipant(
-      ${p.id},
-      '${escapeHtml(p.participant_number || '')}'
-    )">
-    Удалить
-  </button>
-`;
+      const actions = `
+        ${statusActions}
+
+        <button
+          class="btn delete"
+          onclick="deleteParticipant(
+            ${p.id},
+            '${escapeHtml(p.participant_number || '')}'
+          )">
+          Удалить
+        </button>
+      `;
+
 
       const receipt = p.receipt_filename
         ? `
@@ -106,17 +127,42 @@ const actions = `
             Открыть чек
           </a>
         `
-        : 'Нет чека';
+        : `<span class="no-receipt">Нет чека</span>`;
+
 
       return `
         <tr>
+
           <td>
             <strong>${escapeHtml(p.participant_number || '')}</strong>
           </td>
 
-          <td>
+          <td class="fio">
             ${escapeHtml(p.last_name || '')}
             ${escapeHtml(p.first_name || '')}
+          </td>
+
+          <td>
+            ${formatDateOnly(p.birth_date)}
+          </td>
+
+          <td>
+            ${formatGender(p.gender)}
+          </td>
+
+          <td>
+            <a class="contact-link"
+               href="mailto:${escapeHtml(p.email || '')}">
+              ${escapeHtml(p.email || '')}
+            </a>
+          </td>
+
+          <td>
+            ${escapeHtml(p.phone || '')}
+          </td>
+
+          <td>
+            ${escapeHtml(p.emergency_phone || '')}
           </td>
 
           <td>
@@ -125,6 +171,10 @@ const actions = `
 
           <td>
             ${formatPrice(p.price)}
+          </td>
+
+          <td>
+            ${formatDateTime(p.created_at)}
           </td>
 
           <td>
@@ -140,9 +190,12 @@ const actions = `
           <td class="actions">
             ${actions}
           </td>
+
         </tr>
       `;
+
     }).join('');
+
 
     res.send(`
 <!DOCTYPE html>
@@ -153,7 +206,7 @@ const actions = `
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<title>Pink Run — Проверка оплат</title>
+<title>Pink Run — Участники</title>
 
 <style>
 
@@ -174,18 +227,25 @@ body {
 }
 
 .container {
-  max-width: 1250px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 40px 24px;
+  padding: 32px 24px;
 }
 
 .header {
-  margin-bottom: 28px;
+  margin-bottom: 24px;
+}
+
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
 }
 
 .header h1 {
   margin: 0 0 8px;
-  font-size: 32px;
+  font-size: 30px;
 }
 
 .header p {
@@ -193,41 +253,64 @@ body {
   color: #777078;
 }
 
+.summary {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #5e555a;
+}
+
+.summary strong {
+  color: #171219;
+}
+
 .card {
   background: white;
   border: 1px solid #eee5e9;
   border-radius: 18px;
-  overflow: hidden;
+  overflow-x: auto;
   box-shadow: 0 8px 30px rgba(0,0,0,.04);
 }
 
 table {
   width: 100%;
+  min-width: 1750px;
   border-collapse: collapse;
 }
 
 th {
   text-align: left;
-  padding: 16px;
+  padding: 14px 12px;
   background: #faf4f7;
-  font-size: 13px;
+  font-size: 12px;
   color: #716a70;
   white-space: nowrap;
+  position: sticky;
+  top: 0;
 }
 
 td {
-  padding: 17px 16px;
+  padding: 15px 12px;
   border-top: 1px solid #f1eaed;
   vertical-align: middle;
+  font-size: 14px;
+}
+
+.fio {
+  min-width: 180px;
 }
 
 .status {
   display: inline-block;
   padding: 7px 10px;
   border-radius: 20px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.status.pending {
+  background: #f2ecef;
+  color: #625960;
 }
 
 .status.review {
@@ -245,14 +328,26 @@ td {
   color: #9d2626;
 }
 
-.receipt {
+.status.cancelled {
+  background: #eeeeee;
+  color: #666666;
+}
+
+.receipt,
+.contact-link {
   color: #bd2d67;
   font-weight: 600;
   text-decoration: none;
 }
 
-.receipt:hover {
+.receipt:hover,
+.contact-link:hover {
   text-decoration: underline;
+}
+
+.no-receipt {
+  color: #999;
+  white-space: nowrap;
 }
 
 .actions {
@@ -277,6 +372,7 @@ td {
   background: #f2ecef;
   color: #5e555a;
 }
+
 .delete {
   background: #fff0f0;
   color: #b42318;
@@ -296,33 +392,17 @@ td {
   background: #8f1c13;
 }
 
-.header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-@media(max-width: 700px) {
-  .header-row {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-}
 .empty {
   padding: 50px;
   text-align: center;
   color: #777078;
 }
 
-@media(max-width: 900px) {
+@media(max-width: 700px) {
 
-  .card {
-    overflow-x: auto;
-  }
-
-  table {
-    min-width: 900px;
+  .header-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
 }
@@ -335,28 +415,35 @@ td {
 
 <div class="container">
 
- <div class="header">
+  <div class="header">
 
-  <div class="header-row">
+    <div class="header-row">
 
-    <div>
-      <h1>Pink Run — проверка оплат</h1>
+      <div>
 
-      <p>
-        Здесь отображаются заявки,
-        по которым участники отправили подтверждение оплаты.
-      </p>
+        <h1>Pink Run — участники</h1>
+
+        <p>
+          Все регистрации участников, включая ожидающие оплаты.
+        </p>
+
+        <div class="summary">
+          Всего записей:
+          <strong>${result.rowCount}</strong>
+        </div>
+
+      </div>
+
+      <button
+        class="btn delete-all"
+        onclick="deleteAllParticipants()">
+        Удалить все записи
+      </button>
+
     </div>
-
-    <button
-      class="btn delete-all"
-      onclick="deleteAllParticipants()">
-      Удалить все записи
-    </button>
 
   </div>
 
-</div>
 
   <div class="card">
 
@@ -366,15 +453,23 @@ td {
           <table>
 
             <thead>
+
               <tr>
                 <th>№ участника</th>
                 <th>ФИО</th>
+                <th>Дата рождения</th>
+                <th>Пол</th>
+                <th>Email</th>
+                <th>Телефон</th>
+                <th>Экстренный контакт</th>
                 <th>Дистанция</th>
                 <th>Сумма</th>
+                <th>Дата регистрации</th>
                 <th>Статус</th>
                 <th>Чек</th>
                 <th>Действия</th>
               </tr>
+
             </thead>
 
             <tbody>
@@ -385,7 +480,7 @@ td {
         `
         : `
           <div class="empty">
-            Заявок на проверку пока нет.
+            Зарегистрированных участников пока нет.
           </div>
         `
     }
@@ -398,6 +493,7 @@ td {
 <script>
 
 const ADMIN_KEY = ${JSON.stringify(TEST_KEY)};
+
 
 /* =========================================================
    ИЗМЕНЕНИЕ СТАТУСА ОПЛАТЫ
@@ -470,7 +566,7 @@ async function deleteParticipant(
     'Удалить участника ' +
     participantNumber +
     '?\\n\\n' +
-    'Будут удалены регистрация и загруженный чек.'
+    'Запись участника будет удалена из базы.'
   );
 
   if (!confirmed) {
@@ -543,7 +639,7 @@ async function deleteAllParticipants() {
 
   const secondConfirm = confirm(
     'Подтвердите ещё раз.\\n\\n' +
-    'Будут удалены ВСЕ регистрации и ВСЕ загруженные чеки.'
+    'Будут удалены ВСЕ регистрации.'
   );
 
   if (!secondConfirm) {
@@ -610,7 +706,7 @@ async function deleteAllParticipants() {
     );
 
     res.status(500).send(
-      'Не удалось загрузить список оплат'
+      'Не удалось загрузить список участников'
     );
   }
 });
@@ -693,6 +789,7 @@ router.post(
   }
 );
 
+
 /* =========================================================
    УДАЛЕНИЕ ОДНОГО УЧАСТНИКА
    ========================================================= */
@@ -756,8 +853,7 @@ router.delete(
       const result = await pool.query(
         `
         DELETE FROM participants
-  WHERE status IN ('payment_review', 'paid', 'rejected')
-  RETURNING id
+        RETURNING id
         `
       );
 
@@ -779,6 +875,7 @@ router.delete(
     }
   }
 );
+
 
 /* =========================================================
    ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -804,6 +901,84 @@ function formatPrice(value) {
     'ru-RU'
   ).format(number) + ' ₸';
 
+}
+
+
+function formatGender(value) {
+
+  const gender = String(value || '').toLowerCase();
+
+  if (
+    gender === 'female' ||
+    gender === 'f' ||
+    gender === 'женский'
+  ) {
+    return 'Женский';
+  }
+
+  if (
+    gender === 'male' ||
+    gender === 'm' ||
+    gender === 'мужской'
+  ) {
+    return 'Мужской';
+  }
+
+  return escapeHtml(value || '—');
+
+}
+
+
+function formatDateOnly(value) {
+
+  if (!value) {
+    return '—';
+  }
+
+  const text = String(value);
+
+  const match =
+    text.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);
+
+  if (match) {
+    return (
+      match[3] +
+      '.' +
+      match[2] +
+      '.' +
+      match[1]
+    );
+  }
+
+  return escapeHtml(text);
+
+}
+
+
+function formatDateTime(value) {
+
+  if (!value) {
+    return '—';
+  }
+
+  try {
+
+    return new Intl.DateTimeFormat(
+      'ru-RU',
+      {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }
+    ).format(new Date(value));
+
+  } catch (error) {
+
+    return escapeHtml(value);
+
+  }
 }
 
 
