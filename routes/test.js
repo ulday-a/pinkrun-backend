@@ -756,7 +756,8 @@ router.delete(
       const result = await pool.query(
         `
         DELETE FROM participants
-        RETURNING id
+  WHERE status IN ('payment_review', 'paid', 'rejected')
+  RETURNING id
         `
       );
 
