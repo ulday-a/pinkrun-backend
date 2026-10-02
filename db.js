@@ -29,6 +29,20 @@ async function initDb() {
     );
   `);
 
+  // Метаданные чеков. Сами файлы хранятся в Cloudinary, а не в PostgreSQL.
+  // receipt_data оставляем для совместимости со старыми чеками; новые загрузки
+  // записывают туда NULL. После проверки миграции колонку можно удалить отдельно.
+  await pool.query(`
+    ALTER TABLE participants
+      ADD COLUMN IF NOT EXISTS receipt_url TEXT,
+      ADD COLUMN IF NOT EXISTS receipt_public_id TEXT,
+      ADD COLUMN IF NOT EXISTS receipt_resource_type TEXT,
+      ADD COLUMN IF NOT EXISTS receipt_data BYTEA,
+      ADD COLUMN IF NOT EXISTS receipt_filename TEXT,
+      ADD COLUMN IF NOT EXISTS receipt_content_type TEXT,
+      ADD COLUMN IF NOT EXISTS receipt_uploaded_at TIMESTAMP;
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS auth_codes (
       id SERIAL PRIMARY KEY,
