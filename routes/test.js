@@ -114,6 +114,12 @@ router.get('/admin-test', checkAdminKey, async (req, res) => {
             onclick="changeStatus(${p.id}, 'paid')">
             Подтвердить оплату
           </button>
+
+          <button
+            class="btn reject"
+            onclick="changeStatus(${p.id}, 'rejected')">
+            Отклонить платеж
+          </button>
         `;
       }
 
@@ -757,7 +763,7 @@ router.post(
       const allowedCurrentStatuses =
         status === 'paid'
           ? ['payment_review', 'pending_payment']
-          : ['payment_review'];
+          : ['payment_review', 'pending_payment'];
 
       const result = await pool.query(
         `
