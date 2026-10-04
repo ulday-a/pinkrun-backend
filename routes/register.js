@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 
-const MAX_PARTICIPANTS = 500;
+const MAX_PARTICIPANTS = 474;
 
 
 /* =========================================================
@@ -100,7 +100,7 @@ router.post('/register', async (req, res) => {
      * Блокировка регистрации.
      *
      * Не позволяет двум параллельным запросам
-     * одновременно занять последний 500-й слот.
+     * одновременно занять последний 474-й слот.
      */
     await client.query(`
       SELECT pg_advisory_xact_lock(500001)
@@ -122,7 +122,7 @@ router.post('/register', async (req, res) => {
 
 
     /* -------------------------------------------------------
-       Лимит — 500 участников
+       Лимит — 474 участника
        ------------------------------------------------------- */
 
     if (registeredCount >= MAX_PARTICIPANTS) {
@@ -133,7 +133,7 @@ router.post('/register', async (req, res) => {
         success: false,
         registrationClosed: true,
         error:
-          'Регистрация завершена. Достигнут лимит 500 участников.'
+          'Регистрация завершена. Достигнут лимит 474 участников.'
       });
     }
 
