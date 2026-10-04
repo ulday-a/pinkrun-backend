@@ -288,11 +288,12 @@ body {
   gap: 10px;
 }
 
-.header-bulk-action:disabled {
-  opacity: .35;
-  cursor: not-allowed;
-  box-shadow: none;
-  transform: none;
+.header-bulk-action {
+  display: none;
+}
+
+.header-bulk-action.available {
+  display: inline-flex;
 }
 
 .header-bulk-approve {
@@ -773,10 +774,13 @@ function updateBulkToolbar() {
     document.getElementById('headerBulkDelete')
   ].filter(Boolean);
 
-  const enableHeaderBulkActions = selected.length >= 2;
+  const showHeaderBulkActions = selected.length >= 2;
 
   headerButtons.forEach(button => {
-    button.disabled = !enableHeaderBulkActions;
+    button.classList.toggle(
+      'available',
+      showHeaderBulkActions
+    );
   });
 
   if (selectAll) {
@@ -798,6 +802,18 @@ function toggleAllRows(checked) {
 
   updateBulkToolbar();
 }
+
+
+// Дополнительный обработчик: гарантирует обновление кнопок
+// при выборе/снятии чекбоксов в любом браузере.
+document.addEventListener('change', event => {
+  if (
+    event.target.matches('.row-select') ||
+    event.target.id === 'selectAll'
+  ) {
+    setTimeout(updateBulkToolbar, 0);
+  }
+});
 
 
 async function bulkAction(action) {
