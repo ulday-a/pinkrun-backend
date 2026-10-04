@@ -289,11 +289,14 @@ body {
 }
 
 .header-bulk-action {
-  display: none;
+  display: inline-flex;
 }
 
-.header-bulk-action.available {
-  display: inline-flex;
+.header-bulk-action:disabled {
+  opacity: .38;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 .header-bulk-approve {
@@ -774,13 +777,10 @@ function updateBulkToolbar() {
     document.getElementById('headerBulkDelete')
   ].filter(Boolean);
 
-  const showHeaderBulkActions = selected.length >= 2;
+  const enableHeaderBulkActions = selected.length >= 2;
 
   headerButtons.forEach(button => {
-    button.classList.toggle(
-      'available',
-      showHeaderBulkActions
-    );
+    button.disabled = !enableHeaderBulkActions;
   });
 
   if (selectAll) {
@@ -839,7 +839,7 @@ async function bulkAction(action) {
   const confirmed = confirm(
     'Выбрано записей: ' +
     participantIds.length +
-    '.\n\nВы действительно хотите ' +
+    '.\\n\\nВы действительно хотите ' +
     actionText +
     '?'
   );
@@ -850,7 +850,7 @@ async function bulkAction(action) {
 
   if (action === 'delete') {
     const secondConfirm = confirm(
-      'Подтвердите удаление ещё раз.\n\n' +
+      'Подтвердите удаление ещё раз.\\n\\n' +
       'Удалённые записи восстановить автоматически нельзя.'
     );
 
@@ -894,7 +894,7 @@ async function bulkAction(action) {
 
       if ((data.skipped ?? 0) > 0) {
         message +=
-          '\nПропущено: ' +
+          '\\nПропущено: ' +
           data.skipped +
           ' (статус не позволяет выполнить действие).';
       }
