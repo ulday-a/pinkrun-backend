@@ -280,6 +280,36 @@ body {
   gap: 20px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.header-bulk-action:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.header-bulk-approve {
+  background: #e43878;
+  color: white;
+}
+
+.header-bulk-reject {
+  background: #f2ecef;
+  color: #5e555a;
+}
+
+.header-bulk-delete {
+  background: #fff0f0;
+  color: #b42318;
+}
+
 .header h1 {
   margin: 0 0 8px;
   font-size: 30px;
@@ -493,6 +523,11 @@ td {
     flex-direction: column;
   }
 
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
 }
 
 </style>
@@ -525,11 +560,100 @@ td {
 
       </div>
 
-      <button
-        class="btn delete-all"
-        onclick="deleteAllParticipants()">
-        Удалить все записи
-      </button>
+      <div class="header-actions">
+
+
+        <button
+
+
+          class="btn header-bulk-action header-bulk-approve"
+
+
+          type="button"
+
+
+          id="headerBulkApprove"
+
+
+          onclick="bulkAction('paid')"
+
+
+          disabled>
+
+
+          Подтвердить оплату
+
+
+        </button>
+
+
+
+        <button
+
+
+          class="btn header-bulk-action header-bulk-reject"
+
+
+          type="button"
+
+
+          id="headerBulkReject"
+
+
+          onclick="bulkAction('rejected')"
+
+
+          disabled>
+
+
+          Отклонить
+
+
+        </button>
+
+
+
+        <button
+
+
+          class="btn header-bulk-action header-bulk-delete"
+
+
+          type="button"
+
+
+          id="headerBulkDelete"
+
+
+          onclick="bulkAction('delete')"
+
+
+          disabled>
+
+
+          Удалить выбранные
+
+
+        </button>
+
+
+
+        <button
+
+
+          class="btn delete-all"
+
+
+          onclick="deleteAllParticipants()">
+
+
+          Удалить все записи
+
+
+        </button>
+
+
+      </div>
 
     </div>
 
@@ -642,6 +766,18 @@ function updateBulkToolbar() {
 
   count.textContent = String(selected.length);
   toolbar.classList.toggle('active', selected.length > 0);
+
+  const headerButtons = [
+    document.getElementById('headerBulkApprove'),
+    document.getElementById('headerBulkReject'),
+    document.getElementById('headerBulkDelete')
+  ].filter(Boolean);
+
+  const enableHeaderBulkActions = selected.length >= 2;
+
+  headerButtons.forEach(button => {
+    button.disabled = !enableHeaderBulkActions;
+  });
 
   if (selectAll) {
     selectAll.checked =
