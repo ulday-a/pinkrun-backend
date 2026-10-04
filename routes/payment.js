@@ -224,10 +224,25 @@ router.get('/payment-claim/:participantId/receipt', async (req, res) => {
 
     const receipt = result.rows[0];
 
-    res.setHeader('Content-Type', receipt.receipt_content_type || 'application/octet-stream');
+    const safeFileName = String(receipt.receipt_filename || 'receipt')
+      .replace(/["\r\n]/g, '');
+
+    // Для PDF принудительно отдаём правильный MIME type,
+    // даже если старый файл был сохранён как application/octet-stream.
+    let responseContentType =
+      receipt.receipt_content_type || 'application/octet-stream';
+
+    if (
+      safeFileName.toLowerCase().endsWith('.pdf') ||
+      responseContentType === 'application/pdf'
+    ) {
+      responseContentType = 'application/pdf';
+    }
+
+    res.setHeader('Content-Type', responseContentType);
     res.setHeader(
       'Content-Disposition',
-      `inline; filename="${String(receipt.receipt_filename || 'receipt').replace(/["\r\n]/g, '')}"`
+      `inline; filename="${safeFileName}"`
     );
 
     if (receipt.receipt_url) {
