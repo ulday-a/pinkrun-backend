@@ -29,6 +29,14 @@ function checkAdminKey(req, res, next) {
 router.get('/admin-test', checkAdminKey, async (req, res) => {
   try {
 
+    const paidCountResult = await pool.query(`
+      SELECT COUNT(*)::int AS count
+      FROM participants
+      WHERE status = 'paid'
+    `);
+
+    const paidCount = paidCountResult.rows[0].count;
+
     const result = await pool.query(`
       SELECT
         id,
@@ -450,6 +458,9 @@ td {
         <div class="summary">
           Всего записей:
           <strong>${result.rowCount}</strong>
+          &nbsp;&nbsp;•&nbsp;&nbsp;
+          Оплачено:
+          <strong>${paidCount}</strong>
         </div>
 
       </div>
