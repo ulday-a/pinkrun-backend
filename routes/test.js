@@ -83,25 +83,39 @@ router.get('/admin-test', checkAdminKey, async (req, res) => {
       }
 
 
-      /* Кнопки подтвердить / отклонить
-         показываем только когда чек отправлен */
+      /* Действия по оплате:
+         1) если чек загружен и оплата на проверке — подтвердить / отклонить;
+         2) если чека нет и участник ожидает оплату — администратор может
+            вручную подтвердить поступление платежа. */
 
-      const statusActions =
-        p.status === 'payment_review'
-          ? `
-            <button
-              class="btn approve"
-              onclick="changeStatus(${p.id}, 'paid')">
-              Подтвердить
-            </button>
+      let statusActions = '';
 
-            <button
-              class="btn reject"
-              onclick="changeStatus(${p.id}, 'rejected')">
-              Отклонить
-            </button>
-          `
-          : '';
+      if (p.status === 'payment_review') {
+        statusActions = `
+          <button
+            class="btn approve"
+            onclick="changeStatus(${p.id}, 'paid')">
+            Подтвердить
+          </button>
+
+          <button
+            class="btn reject"
+            onclick="changeStatus(${p.id}, 'rejected')">
+            Отклонить
+          </button>
+        `;
+      } else if (
+        p.status === 'pending_payment' &&
+        !p.receipt_filename
+      ) {
+        statusActions = `
+          <button
+            class="btn approve"
+            onclick="changeStatus(${p.id}, 'paid')">
+            Подтвердить оплату
+          </button>
+        `;
+      }
 
 
       const actions = `
@@ -740,12 +754,17 @@ router.post(
         });
       }
 
+      const allowedCurrentStatuses =
+        status === 'paid'
+          ? ['payment_review', 'pending_payment']
+          : ['payment_review'];
+
       const result = await pool.query(
         `
         UPDATE participants
         SET status = $1
         WHERE id = $2
-          AND status = 'payment_review'
+          AND status = ANY($3::text[])
         RETURNING
           id,
           participant_number,
@@ -753,7 +772,8 @@ router.post(
         `,
         [
           status,
-          participantId
+          participantId,
+          allowedCurrentStatuses
         ]
       );
 
@@ -761,7 +781,7 @@ router.post(
 
         return res.status(404).json({
           error:
-            'Заявка не найдена или уже обработана'
+            'Заявка не найдена, уже обработана или имеет недопустимый статус'
         });
 
       }
