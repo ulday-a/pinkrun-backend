@@ -161,6 +161,15 @@ router.get('/admin-test', checkAdminKey, async (req, res) => {
       return `
         <tr>
 
+          <td class="select-cell">
+            <input
+              type="checkbox"
+              class="row-select"
+              value="${p.id}"
+              onchange="updateBulkToolbar()"
+              aria-label="Выбрать участника ${escapeHtml(p.participant_number || '')}">
+          </td>
+
           <td>
             <strong>${escapeHtml(p.participant_number || '')}</strong>
           </td>
@@ -291,6 +300,57 @@ body {
   color: #171219;
 }
 
+.bulk-toolbar {
+  display: none;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #eee5e9;
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.035);
+}
+
+.bulk-toolbar.active {
+  display: flex;
+}
+
+.bulk-count {
+  margin-right: 6px;
+  font-weight: 700;
+  color: #5e555a;
+}
+
+.bulk-approve {
+  background: #e43878;
+  color: white;
+}
+
+.bulk-reject {
+  background: #f2ecef;
+  color: #5e555a;
+}
+
+.bulk-delete {
+  background: #fff0f0;
+  color: #b42318;
+}
+
+.select-cell {
+  width: 42px;
+  text-align: center;
+}
+
+.row-select,
+#selectAll {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #e43878;
+}
+
 .card {
   background: white;
   border: 1px solid #eee5e9;
@@ -301,7 +361,7 @@ body {
 
 table {
   width: 100%;
-  min-width: 1750px;
+  min-width: 1800px;
   border-collapse: collapse;
 }
 
@@ -476,6 +536,33 @@ td {
   </div>
 
 
+  <div class="bulk-toolbar" id="bulkToolbar">
+    <span class="bulk-count">
+      Выбрано: <strong id="selectedCount">0</strong>
+    </span>
+
+    <button
+      class="btn bulk-approve"
+      type="button"
+      onclick="bulkAction('paid')">
+      Подтвердить оплату
+    </button>
+
+    <button
+      class="btn bulk-reject"
+      type="button"
+      onclick="bulkAction('rejected')">
+      Отклонить
+    </button>
+
+    <button
+      class="btn bulk-delete"
+      type="button"
+      onclick="bulkAction('delete')">
+      Удалить записи
+    </button>
+  </div>
+
   <div class="card">
 
     ${
@@ -486,6 +573,13 @@ td {
             <thead>
 
               <tr>
+                <th class="select-cell">
+                  <input
+                    type="checkbox"
+                    id="selectAll"
+                    onchange="toggleAllRows(this.checked)"
+                    aria-label="Выбрать все записи">
+                </th>
                 <th>№ участника</th>
                 <th>ФИО</th>
                 <th>Дата рождения</th>
@@ -524,6 +618,147 @@ td {
 <script>
 
 const ADMIN_KEY = ${JSON.stringify(TEST_KEY)};
+
+
+/* =========================================================
+   МНОЖЕСТВЕННЫЙ ВЫБОР И МАССОВЫЕ ДЕЙСТВИЯ
+   ========================================================= */
+
+function getSelectedIds() {
+  return Array.from(
+    document.querySelectorAll('.row-select:checked')
+  ).map(el => Number(el.value));
+}
+
+
+function updateBulkToolbar() {
+  const selected = getSelectedIds();
+  const toolbar = document.getElementById('bulkToolbar');
+  const count = document.getElementById('selectedCount');
+  const selectAll = document.getElementById('selectAll');
+  const allRows = Array.from(
+    document.querySelectorAll('.row-select')
+  );
+
+  count.textContent = String(selected.length);
+  toolbar.classList.toggle('active', selected.length > 0);
+
+  if (selectAll) {
+    selectAll.checked =
+      allRows.length > 0 &&
+      selected.length === allRows.length;
+
+    selectAll.indeterminate =
+      selected.length > 0 &&
+      selected.length < allRows.length;
+  }
+}
+
+
+function toggleAllRows(checked) {
+  document.querySelectorAll('.row-select').forEach(el => {
+    el.checked = checked;
+  });
+
+  updateBulkToolbar();
+}
+
+
+async function bulkAction(action) {
+  const participantIds = getSelectedIds();
+
+  if (participantIds.length === 0) {
+    alert('Сначала выберите записи.');
+    return;
+  }
+
+  let actionText = '';
+
+  if (action === 'paid') {
+    actionText = 'подтвердить оплату';
+  } else if (action === 'rejected') {
+    actionText = 'отклонить оплату';
+  } else if (action === 'delete') {
+    actionText = 'удалить выбранные записи';
+  } else {
+    return;
+  }
+
+  const confirmed = confirm(
+    'Выбрано записей: ' +
+    participantIds.length +
+    '.\n\nВы действительно хотите ' +
+    actionText +
+    '?'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  if (action === 'delete') {
+    const secondConfirm = confirm(
+      'Подтвердите удаление ещё раз.\n\n' +
+      'Удалённые записи восстановить автоматически нельзя.'
+    );
+
+    if (!secondConfirm) {
+      return;
+    }
+  }
+
+  try {
+    const response = await fetch(
+      '/admin-test/bulk-action',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Key': ADMIN_KEY
+        },
+        body: JSON.stringify({
+          participantIds,
+          action
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error || 'Не удалось выполнить действие'
+      );
+    }
+
+    let message = '';
+
+    if (action === 'delete') {
+      message = 'Удалено записей: ' + (data.affected ?? 0);
+    } else {
+      message =
+        'Обновлено записей: ' +
+        (data.affected ?? 0);
+
+      if ((data.skipped ?? 0) > 0) {
+        message +=
+          '\nПропущено: ' +
+          data.skipped +
+          ' (статус не позволяет выполнить действие).';
+      }
+    }
+
+    alert(message);
+    location.reload();
+
+  } catch (error) {
+    console.error(
+      'Ошибка массового действия:',
+      error
+    );
+    alert(error.message);
+  }
+}
 
 
 /* =========================================================
@@ -741,6 +976,115 @@ async function deleteAllParticipants() {
     );
   }
 });
+
+
+/* =========================================================
+   МАССОВЫЕ ДЕЙСТВИЯ
+   ========================================================= */
+
+router.post(
+  '/admin-test/bulk-action',
+  checkAdminKey,
+  async (req, res) => {
+
+    try {
+
+      const {
+        participantIds,
+        action
+      } = req.body;
+
+      if (
+        !Array.isArray(participantIds) ||
+        participantIds.length === 0
+      ) {
+        return res.status(400).json({
+          error: 'Не выбраны участники'
+        });
+      }
+
+      const ids = [
+        ...new Set(
+          participantIds
+            .map(Number)
+            .filter(Number.isInteger)
+            .filter(id => id > 0)
+        )
+      ];
+
+      if (ids.length === 0) {
+        return res.status(400).json({
+          error: 'Некорректные ID участников'
+        });
+      }
+
+      if (
+        !['paid', 'rejected', 'delete'].includes(action)
+      ) {
+        return res.status(400).json({
+          error: 'Недопустимое массовое действие'
+        });
+      }
+
+      if (action === 'delete') {
+
+        const result = await pool.query(
+          `
+          DELETE FROM participants
+          WHERE id = ANY($1::int[])
+          RETURNING id
+          `,
+          [ids]
+        );
+
+        return res.json({
+          success: true,
+          action,
+          affected: result.rowCount,
+          skipped: ids.length - result.rowCount
+        });
+      }
+
+      const allowedCurrentStatuses = [
+        'pending_payment',
+        'payment_review'
+      ];
+
+      const result = await pool.query(
+        `
+        UPDATE participants
+        SET status = $1
+        WHERE id = ANY($2::int[])
+          AND status = ANY($3::text[])
+        RETURNING id
+        `,
+        [
+          action,
+          ids,
+          allowedCurrentStatuses
+        ]
+      );
+
+      return res.json({
+        success: true,
+        action,
+        affected: result.rowCount,
+        skipped: ids.length - result.rowCount
+      });
+
+    } catch (error) {
+
+      console.error(
+        'Ошибка массового действия:',
+        error
+      );
+
+      return res.status(500).json({
+        error: 'Не удалось выполнить массовое действие'
+      });
+    }
+  }
+);
 
 
 /* =========================================================
