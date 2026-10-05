@@ -3,6 +3,7 @@ const router = express.Router();
 const { pool } = require('../db');
 
 const MAX_PARTICIPANTS = 474;
+const REGISTRATION_OPEN = false;
 
 
 /* =========================================================
@@ -48,6 +49,13 @@ async function nextParticipantNumber(client = pool) {
 // Начальный статус: ожидает оплаты.
 
 router.post('/register', async (req, res) => {
+  if (!REGISTRATION_OPEN) {
+    return res.status(403).json({
+      error: 'Регистрация временно закрыта.',
+      registrationClosed: true,
+      maxParticipants: MAX_PARTICIPANTS
+    });
+  }
 
   const client = await pool.connect();
 
