@@ -1,32 +1,165 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const {
+  isAdminRequest,
+  requireAdmin,
+  setAdminSessionCookie,
+  clearAdminSessionCookie,
+  verifyAdminPassword,
+} = require('../adminAuth');
 
-const TEST_KEY = process.env.TEST_ADMIN_KEY || 'pinkrun-test';
 
 /* =========================================================
-   ПРОВЕРКА АДМИН-КЛЮЧА
+   ВХОД В АДМИН-ПАНЕЛЬ
    ========================================================= */
 
-function checkAdminKey(req, res, next) {
-  const key =
-    req.query.key ||
-    req.body?.key ||
-    req.get('X-Admin-Key');
+function sendLoginPage(res, errorMessage = '') {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Frame-Options', 'DENY');
 
-  if (key !== TEST_KEY) {
-    return res.status(403).send('Доступ запрещён');
+  const errorHtml = errorMessage
+    ? `<div class="login-error">${escapeHtml(errorMessage)}</div>`
+    : '';
+
+  res.send(`
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pink Run — вход в админ-панель</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: #faf8f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      color: #171219;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      background: #fff;
+      border: 1px solid #eee5e9;
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 12px 36px rgba(0,0,0,.06);
+    }
+    h1 { margin: 0 0 8px; font-size: 26px; }
+    p { margin: 0 0 22px; color: #777078; line-height: 1.45; }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #5e555a;
+    }
+    input {
+      width: 100%;
+      padding: 13px 14px;
+      border: 1px solid #d9cfd4;
+      border-radius: 11px;
+      font-size: 16px;
+      outline: none;
+    }
+    input:focus {
+      border-color: #e43878;
+      box-shadow: 0 0 0 3px rgba(228,56,120,.12);
+    }
+    button {
+      width: 100%;
+      margin-top: 16px;
+      border: 0;
+      border-radius: 11px;
+      padding: 13px 16px;
+      background: #e43878;
+      color: white;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .login-error {
+      margin-bottom: 16px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #fde8e8;
+      color: #9d2626;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <form class="login-card" method="post" action="/admin-test/login" autocomplete="off">
+    <h1>Pink Run — админ-панель</h1>
+    <p>Введите пароль администратора.</p>
+    ${errorHtml}
+    <label for="adminPassword">Пароль</label>
+    <input
+      id="adminPassword"
+      name="password"
+      type="password"
+      required
+      autofocus
+      autocomplete="current-password">
+    <button type="submit">Войти</button>
+  </form>
+</body>
+</html>
+  `);
+}
+
+router.get('/admin-test/login', (req, res) => {
+  if (isAdminRequest(req)) {
+    return res.redirect('/admin-test');
   }
 
-  next();
-}
+  return sendLoginPage(res);
+});
+
+router.post(
+  '/admin-test/login',
+  express.urlencoded({ extended: false }),
+  (req, res) => {
+    if (!verifyAdminPassword(req.body?.password)) {
+      return res.status(401).send(
+        '<!doctype html><meta charset="utf-8">' +
+        '<script>alert("Неверный пароль");location.href="/admin-test/login";</script>'
+      );
+    }
+
+    setAdminSessionCookie(res);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.redirect(303, '/admin-test');
+  }
+);
+
+router.post('/admin-test/logout', requireAdmin, (req, res) => {
+  clearAdminSessionCookie(res);
+  return res.redirect(303, '/admin-test/login');
+});
 
 
 /* =========================================================
    АДМИН-СТРАНИЦА
    ========================================================= */
 
-router.get('/admin-test', checkAdminKey, async (req, res) => {
+router.get('/admin-test', async (req, res) => {
+  if (!isAdminRequest(req)) {
+    return res.redirect('/admin-test/login');
+  }
+
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Frame-Options', 'DENY');
   try {
 
     const paidCountResult = await pool.query(`
@@ -151,7 +284,7 @@ router.get('/admin-test', checkAdminKey, async (req, res) => {
           <a
             class="receipt"
             target="_blank"
-            href="/api/payment-claim/${p.id}/receipt?key=${encodeURIComponent(TEST_KEY)}">
+            href="/api/payment-claim/${p.id}/receipt">
             Открыть чек
           </a>
         `
@@ -504,6 +637,16 @@ td {
   background: #ffe0e0;
 }
 
+.manual-add {
+  background: #e43878;
+  color: white;
+  padding: 11px 16px;
+}
+
+.manual-add:hover {
+  background: #ca2f6b;
+}
+
 .delete-all {
   background: #b42318;
   color: white;
@@ -512,6 +655,99 @@ td {
 
 .delete-all:hover {
   background: #8f1c13;
+}
+
+.logout {
+  background: #f2ecef;
+  color: #5e555a;
+}
+
+.logout:hover {
+  background: #e8dfe4;
+}
+
+.manual-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(25, 18, 22, .48);
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.manual-modal.open {
+  display: flex;
+}
+
+.manual-modal-card {
+  width: 100%;
+  max-width: 460px;
+  background: #fff;
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.18);
+}
+
+.manual-modal-card h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.manual-modal-card p {
+  margin: 0 0 18px;
+  color: #777078;
+  line-height: 1.45;
+}
+
+.manual-field {
+  margin-bottom: 14px;
+}
+
+.manual-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #5e555a;
+}
+
+.manual-field input,
+.manual-field select {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #d9cfd4;
+  border-radius: 10px;
+  font: inherit;
+  background: #fff;
+}
+
+.manual-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.manual-cancel {
+  background: #f2ecef;
+  color: #5e555a;
+}
+
+.manual-save {
+  background: #e43878;
+  color: #fff;
+}
+
+.manual-error {
+  display: none;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fde8e8;
+  color: #9d2626;
+  font-size: 14px;
 }
 
 .empty {
@@ -639,6 +875,13 @@ td {
 
 
         </button>
+        <button
+          class="btn manual-add"
+          type="button"
+          onclick="openManualAddModal()">
+          Добавить участника
+        </button>
+
 
 
 
@@ -655,6 +898,14 @@ td {
 
 
         </button>
+        <form method="post" action="/admin-test/logout" style="display:inline;">
+          <button
+            class="btn logout"
+            type="submit">
+            Выйти
+          </button>
+        </form>
+
 
 
       </div>
@@ -743,10 +994,113 @@ td {
 </div>
 
 
+<div class="manual-modal" id="manualAddModal">
+  <div class="manual-modal-card">
+    <h2>Добавить участника</h2>
+    <p>
+      Участник будет сразу добавлен со статусом «Оплачено»
+      и появится в публичном списке на сайте.
+    </p>
+
+    <div class="manual-field">
+      <label for="manualFirstName">Имя *</label>
+      <input id="manualFirstName" type="text" maxlength="80">
+    </div>
+
+    <div class="manual-field">
+      <label for="manualLastName">Фамилия *</label>
+      <input id="manualLastName" type="text" maxlength="80">
+    </div>
+
+    <div class="manual-field">
+      <label for="manualDistance">Дистанция</label>
+      <select id="manualDistance">
+        <option value="1.3 км">1.3 км</option>
+        <option value="3.9 км">3.9 км</option>
+        <option value="Вручную">Не указывать</option>
+      </select>
+    </div>
+
+    <div class="manual-error" id="manualAddError"></div>
+
+    <div class="manual-modal-actions">
+      <button class="btn manual-cancel" type="button" onclick="closeManualAddModal()">
+        Отмена
+      </button>
+
+      <button class="btn manual-save" type="button" id="manualAddSaveBtn" onclick="saveManualParticipant()">
+        Добавить
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 
-const ADMIN_KEY = ${JSON.stringify(TEST_KEY)};
+/* =========================================================
+   ДОБАВЛЕНИЕ УЧАСТНИКА ВРУЧНУЮ
+   ========================================================= */
 
+function openManualAddModal() {
+  document.getElementById('manualAddError').style.display = 'none';
+  document.getElementById('manualAddError').textContent = '';
+  document.getElementById('manualFirstName').value = '';
+  document.getElementById('manualLastName').value = '';
+  document.getElementById('manualDistance').value = '1.3 км';
+  document.getElementById('manualAddModal').classList.add('open');
+
+  setTimeout(() => {
+    document.getElementById('manualFirstName').focus();
+  }, 50);
+}
+
+function closeManualAddModal() {
+  document.getElementById('manualAddModal').classList.remove('open');
+}
+
+async function saveManualParticipant() {
+  const firstName = document.getElementById('manualFirstName').value.trim();
+  const lastName = document.getElementById('manualLastName').value.trim();
+  const distance = document.getElementById('manualDistance').value;
+  const errorEl = document.getElementById('manualAddError');
+  const button = document.getElementById('manualAddSaveBtn');
+
+  errorEl.style.display = 'none';
+  errorEl.textContent = '';
+
+  if (!firstName || !lastName) {
+    errorEl.textContent = 'Укажите имя и фамилию.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Добавление...';
+
+  try {
+    const response = await fetch('/admin-test/manual-participant', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({firstName, lastName, distance})
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Не удалось добавить участника');
+    }
+
+    alert('Участник добавлен: ' + data.participantNumber);
+    location.reload();
+
+  } catch (error) {
+    errorEl.textContent = error.message;
+    errorEl.style.display = 'block';
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Добавить';
+  }
+}
 
 /* =========================================================
    МНОЖЕСТВЕННЫЙ ВЫБОР И МАССОВЫЕ ДЕЙСТВИЯ
@@ -866,7 +1220,6 @@ async function bulkAction(action) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Admin-Key': ADMIN_KEY
         },
         body: JSON.stringify({
           participantIds,
@@ -939,7 +1292,6 @@ async function changeStatus(id, status) {
 
         headers: {
           'Content-Type': 'application/json',
-          'X-Admin-Key': ADMIN_KEY
         },
 
         body: JSON.stringify({
@@ -1000,7 +1352,6 @@ async function deleteParticipant(
         method: 'DELETE',
 
         headers: {
-          'X-Admin-Key': ADMIN_KEY
         }
       }
     );
@@ -1072,7 +1423,6 @@ async function deleteAllParticipants() {
         method: 'DELETE',
 
         headers: {
-          'X-Admin-Key': ADMIN_KEY
         }
       }
     );
@@ -1131,12 +1481,146 @@ async function deleteAllParticipants() {
 
 
 /* =========================================================
+   ДОБАВЛЕНИЕ УЧАСТНИКА ВРУЧНУЮ
+   ========================================================= */
+
+router.post(
+  '/admin-test/manual-participant',
+  requireAdmin,
+  async (req, res) => {
+
+    const client = await pool.connect();
+
+    try {
+      const firstName = String(req.body?.firstName || '').trim();
+      const lastName = String(req.body?.lastName || '').trim();
+      const distance = String(req.body?.distance || 'Вручную').trim();
+
+      if (!firstName || !lastName) {
+        return res.status(400).json({
+          error: 'Укажите имя и фамилию'
+        });
+      }
+
+      await client.query('BEGIN');
+
+      await client.query(`
+        SELECT pg_advisory_xact_lock(500002)
+      `);
+
+      const numberResult = await client.query(`
+        SELECT COALESCE(
+          MAX(
+            CAST(
+              SUBSTRING(participant_number FROM 4)
+              AS INTEGER
+            )
+          ),
+          0
+        ) AS max_number
+        FROM participants
+        WHERE participant_number ~ '^PR-[0-9]+$'
+      `);
+
+      const nextNumber =
+        Number(numberResult.rows[0].max_number) + 1;
+
+      const participantNumber =
+        'PR-' + String(nextNumber).padStart(4, '0');
+
+      const manualEmail =
+        'manual-' +
+        participantNumber.toLowerCase() +
+        '@pinkrun.local';
+
+      const manualPhone =
+        'manual-' + participantNumber;
+
+      const price =
+        distance === '1.3 км' ||
+        distance === '3.9 км'
+          ? 5000
+          : 0;
+
+      const result = await client.query(
+        `
+        INSERT INTO participants
+        (
+          participant_number,
+          first_name,
+          last_name,
+          birth_date,
+          gender,
+          email,
+          emergency_phone,
+          distance,
+          price,
+          phone,
+          status
+        )
+        VALUES
+        (
+          $1, $2, $3,
+          '-', '-',
+          $4, '-',
+          $5, $6,
+          $7,
+          'paid'
+        )
+        RETURNING
+          id,
+          participant_number,
+          status
+        `,
+        [
+          participantNumber,
+          firstName,
+          lastName,
+          manualEmail,
+          distance,
+          price,
+          manualPhone
+        ]
+      );
+
+      await client.query('COMMIT');
+
+      return res.json({
+        success: true,
+        participantId: result.rows[0].id,
+        participantNumber: result.rows[0].participant_number,
+        status: result.rows[0].status
+      });
+
+    } catch (error) {
+
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
+
+      console.error(
+        'Ошибка ручного добавления участника:',
+        error
+      );
+
+      return res.status(500).json({
+        error: 'Не удалось добавить участника'
+      });
+
+    } finally {
+      client.release();
+    }
+  }
+);
+
+
+/* =========================================================
    МАССОВЫЕ ДЕЙСТВИЯ
    ========================================================= */
 
 router.post(
   '/admin-test/bulk-action',
-  checkAdminKey,
+  requireAdmin,
   async (req, res) => {
 
     try {
@@ -1245,7 +1729,7 @@ router.post(
 
 router.post(
   '/admin-test/payment-status',
-  checkAdminKey,
+  requireAdmin,
   async (req, res) => {
 
     try {
@@ -1329,7 +1813,7 @@ router.post(
 
 router.delete(
   '/admin-test/participant/:id',
-  checkAdminKey,
+  requireAdmin,
   async (req, res) => {
 
     try {
@@ -1378,7 +1862,7 @@ router.delete(
 
 router.delete(
   '/admin-test/participants',
-  checkAdminKey,
+  requireAdmin,
   async (req, res) => {
 
     try {
