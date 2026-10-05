@@ -3,7 +3,7 @@ const router = express.Router();
 const { pool } = require('../db');
 
 const MAX_PARTICIPANTS = 474;
-const REGISTRATION_OPEN = true;
+const REGISTRATION_OPEN = false;
 
 
 /* =========================================================
@@ -230,8 +230,13 @@ router.post('/register', async (req, res) => {
         registeredCount + 1,
 
       remainingSlots:
-        MAX_PARTICIPANTS -
-        (registeredCount + 1)
+        Math.max(
+          MAX_PARTICIPANTS - (registeredCount + 1),
+          0
+        ),
+
+      registrationClosed:
+        (registeredCount + 1) >= MAX_PARTICIPANTS
     });
 
 
@@ -295,19 +300,33 @@ router.get(
           0
         );
 
+      const registrationOpen =
+        REGISTRATION_OPEN &&
+        registered < MAX_PARTICIPANTS;
+
       return res.json({
 
         maxParticipants:
           MAX_PARTICIPANTS,
 
+        registeredCount:
+          registered,
+
+        remainingSlots:
+          remaining,
+
+        registrationOpen:
+          registrationOpen,
+
+        registrationClosed:
+          !registrationOpen,
+
+        // Совместимость со старыми версиями frontend
         registered:
           registered,
 
         remaining:
-          remaining,
-
-        registrationOpen:
-          registered < MAX_PARTICIPANTS
+          remaining
       });
 
     } catch (err) {
