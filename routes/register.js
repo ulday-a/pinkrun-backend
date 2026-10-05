@@ -3,7 +3,7 @@ const router = express.Router();
 const { pool } = require('../db');
 
 const MAX_PARTICIPANTS = 474;
-const REGISTRATION_OPEN = false;
+const REGISTRATION_OPEN = true;
 
 
 /* =========================================================
