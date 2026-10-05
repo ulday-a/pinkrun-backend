@@ -15,14 +15,18 @@ const allowedOrigins = (process.env.ALLOWED_ORIGIN || '*')
   .map(o => o.trim())
   .filter(Boolean);
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     return callback(new Error('CORS: адрес ' + origin + ' не разрешён'));
   },
-}));
+};
+
+// CORS нужен только публичному API, который вызывается с сайта Tilda.
+// Админ-панель работает на том же домене backend и CORS ей не нужен.
+app.use('/api', cors(corsOptions));
 
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'pinkrun-backend' });
